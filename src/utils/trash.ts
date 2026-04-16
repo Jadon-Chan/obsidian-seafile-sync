@@ -1,5 +1,6 @@
-import { App, TFile, normalizePath } from "obsidian";
+import { App, normalizePath } from "obsidian";
 import { stripLeadingSlash } from "./paths";
+import { ensureDirRecursive } from "./vaultIo";
 import { log } from "./logger";
 
 // Format a Date as YYYYMMDD-HHMMSS in local time.
@@ -22,16 +23,10 @@ function parseStampDir(name: string): number | null {
 	return Number.isFinite(t) ? t : null;
 }
 
-async function ensureFolder(app: App, dir: string): Promise<void> {
-	if (!dir) return;
-	const norm = normalizePath(dir);
-	if (await app.vault.adapter.exists(norm)) return;
-	// Create parents recursively via vault.adapter.mkdir (idempotent on Obsidian).
-	await app.vault.adapter.mkdir(norm);
-}
-
 // Copy the current contents of a vault file into the trash tree before the
 // sync engine overwrites or deletes it. No-op if the file doesn't exist.
+// Uses the adapter directly so files under the config dir (which have no
+// TFile) are handled too.
 export async function stashLocal(
 	app: App,
 	trashBase: string,
@@ -39,14 +34,13 @@ export async function stashLocal(
 	stampBase: Date,
 ): Promise<void> {
 	try {
-		const abs = app.vault.getAbstractFileByPath(vaultPath);
-		if (!(abs instanceof TFile)) return;
-		const data = await app.vault.readBinary(abs);
+		if (!(await app.vault.adapter.exists(vaultPath))) return;
+		const data = await app.vault.adapter.readBinary(vaultPath);
 		const dest = normalizePath(
 			`${stripLeadingSlash(trashBase)}/${stampDir(stampBase)}/${stripLeadingSlash(vaultPath)}`,
 		);
 		const idx = dest.lastIndexOf("/");
-		if (idx > 0) await ensureFolder(app, dest.slice(0, idx));
+		if (idx > 0) await ensureDirRecursive(app, dest.slice(0, idx));
 		await app.vault.adapter.writeBinary(dest, data);
 	} catch (e) {
 		log.warn("trash stash failed", vaultPath, e);

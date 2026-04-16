@@ -1,6 +1,8 @@
 // Path helpers: vault paths use forward slashes without a leading slash.
 // Seafile paths use a leading slash. Root in Seafile is "/".
 
+import type { VaultConfigSyncSettings } from "../settings";
+
 export function vaultToSeafile(root: string, vaultPath: string): string {
 	const normRoot = normalizeSeafilePath(root);
 	const clean = stripLeadingSlash(vaultPath);
@@ -48,11 +50,51 @@ export function basename(seafilePath: string): string {
 	return idx < 0 ? p : p.slice(idx + 1);
 }
 
-// eslint-disable-next-line obsidianmd/hardcoded-config-path -- initial default, overridden by setConfigDir
-let DEFAULT_EXCLUDES = [".obsidian/", ".trash/", ".git/"];
+// eslint-disable-next-line obsidianmd/hardcoded-config-path -- overridden at startup via setConfigDir
+let CONFIG_DIR = ".obsidian";
+const SELF_PLUGIN_DIR_NAME = "obsidian-seafile-sync";
+let SELF_PLUGIN_PATH = `${CONFIG_DIR}/plugins/${SELF_PLUGIN_DIR_NAME}`;
 
 export function setConfigDir(dir: string): void {
-	DEFAULT_EXCLUDES = [`${dir}/`, ".trash/", ".git/"];
+	CONFIG_DIR = dir;
+	SELF_PLUGIN_PATH = `${dir}/plugins/${SELF_PLUGIN_DIR_NAME}`;
+}
+
+export function isUnderConfigDir(vaultPath: string): boolean {
+	const p = stripLeadingSlash(vaultPath);
+	return p === CONFIG_DIR || p.startsWith(CONFIG_DIR + "/");
+}
+
+// Files Obsidian writes per-device that must never sync regardless of toggles.
+const ALWAYS_EXCLUDED_CONFIG_LEAVES = new Set([
+	"workspace.json",
+	"workspace-mobile.json",
+	"graph.json",
+]);
+
+export type ConfigCategory =
+	| "self"
+	| "always-excluded"
+	| "appearance"
+	| "hotkeys"
+	| "themesAndSnippets"
+	| "mainSettings"
+	| "communityPluginList"
+	| "communityPluginContent";
+
+export function classifyConfigPath(vaultPath: string): ConfigCategory | null {
+	const p = stripLeadingSlash(vaultPath);
+	if (!isUnderConfigDir(p)) return null;
+	if (p === SELF_PLUGIN_PATH || p.startsWith(SELF_PLUGIN_PATH + "/")) return "self";
+	const rel = p === CONFIG_DIR ? "" : p.slice(CONFIG_DIR.length + 1);
+	if (ALWAYS_EXCLUDED_CONFIG_LEAVES.has(rel)) return "always-excluded";
+	if (rel === "appearance.json") return "appearance";
+	if (rel === "hotkeys.json") return "hotkeys";
+	if (rel === "community-plugins.json") return "communityPluginList";
+	if (rel === "themes" || rel.startsWith("themes/")) return "themesAndSnippets";
+	if (rel === "snippets" || rel.startsWith("snippets/")) return "themesAndSnippets";
+	if (rel === "plugins" || rel.startsWith("plugins/")) return "communityPluginContent";
+	return "mainSettings";
 }
 
 function isGlob(pat: string): boolean {
@@ -92,10 +134,46 @@ export function globToRegex(glob: string): RegExp {
 	return new RegExp("^" + re + "$");
 }
 
-export function isExcluded(vaultPath: string, extra: string[] = []): boolean {
+function isVaultConfigPathAllowed(
+	cat: ConfigCategory,
+	vcs: VaultConfigSyncSettings | undefined,
+): boolean {
+	if (cat === "self" || cat === "always-excluded") return false;
+	if (!vcs || !vcs.enabled) return false;
+	switch (cat) {
+		case "appearance":
+			return vcs.appearance;
+		case "hotkeys":
+			return vcs.hotkeys;
+		case "themesAndSnippets":
+			return vcs.themesAndSnippets;
+		case "mainSettings":
+			return vcs.mainSettings;
+		case "communityPluginList":
+			return vcs.communityPluginList;
+		case "communityPluginContent":
+			return vcs.communityPluginContent;
+	}
+}
+
+export function isExcluded(
+	vaultPath: string,
+	extra: string[] = [],
+	vcs?: VaultConfigSyncSettings,
+): boolean {
 	const p = stripLeadingSlash(vaultPath);
-	const patterns = DEFAULT_EXCLUDES.concat(extra.map((x) => stripLeadingSlash(x)));
-	for (const pat of patterns) {
+
+	if (isUnderConfigDir(p)) {
+		const cat = classifyConfigPath(p);
+		// classify always returns a category for paths under the config dir.
+		if (!cat || !isVaultConfigPathAllowed(cat, vcs)) return true;
+	} else {
+		if (p === ".trash" || p.startsWith(".trash/")) return true;
+		if (p === ".git" || p.startsWith(".git/")) return true;
+	}
+
+	for (const raw of extra) {
+		const pat = stripLeadingSlash(raw);
 		if (!pat) continue;
 		if (isGlob(pat)) {
 			if (globToRegex(pat).test(p)) return true;

@@ -179,6 +179,8 @@ export class SeafileSettingsTab extends PluginSettingTab {
 				);
 			});
 
+		this.renderVaultConfigSync(containerEl);
+
 		const configDir = this.app.vault.configDir;
 		new Setting(containerEl)
 			.setName("Extra excludes")
@@ -203,6 +205,88 @@ export class SeafileSettingsTab extends PluginSettingTab {
 			text: `Last sync: ${last ? new Date(last).toLocaleString() : "never"}`,
 			cls: "setting-item-description",
 		});
+	}
+
+	private renderVaultConfigSync(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName("Vault configuration sync").setHeading();
+		containerEl.createEl("p", {
+			text:
+				"Sync items inside your vault's configuration folder. " +
+				"Workspace layout, graph view state, and this plugin's own folder " +
+				"are always excluded.",
+			cls: "setting-item-description",
+		});
+
+		const vcs = this.plugin.settings.vaultConfigSync;
+
+		new Setting(containerEl)
+			.setName("Enable")
+			.setDesc(
+				"Master switch. When off, the entire configuration folder is excluded.",
+			)
+			.addToggle((t) =>
+				t.setValue(vcs.enabled).onChange(async (v) => {
+					vcs.enabled = v;
+					await this.plugin.saveAll();
+					this.display();
+				}),
+			);
+
+		if (!vcs.enabled) return;
+
+		const subToggle = (
+			name: string,
+			desc: string,
+			get: () => boolean,
+			set: (v: boolean) => void,
+		): void => {
+			new Setting(containerEl)
+				.setName(name)
+				.setDesc(desc)
+				.addToggle((t) =>
+					t.setValue(get()).onChange(async (v) => {
+						set(v);
+						await this.plugin.saveAll();
+					}),
+				);
+		};
+
+		subToggle(
+			"Appearance",
+			"appearance.json (theme name, font size, base font, etc.)",
+			() => vcs.appearance,
+			(v) => (vcs.appearance = v),
+		);
+		subToggle(
+			"Hotkeys",
+			"hotkeys.json (custom keyboard shortcuts).",
+			() => vcs.hotkeys,
+			(v) => (vcs.hotkeys = v),
+		);
+		subToggle(
+			"Themes and snippets",
+			"themes/ and snippets/ folders.",
+			() => vcs.themesAndSnippets,
+			(v) => (vcs.themesAndSnippets = v),
+		);
+		subToggle(
+			"Main settings",
+			"app.json, core-plugins.json, and other top-level settings files (daily notes, bookmarks, templates, etc.).",
+			() => vcs.mainSettings,
+			(v) => (vcs.mainSettings = v),
+		);
+		subToggle(
+			"Community plugin list",
+			"community-plugins.json (which community plugins are enabled). Leave off if devices use different plugin sets.",
+			() => vcs.communityPluginList,
+			(v) => (vcs.communityPluginList = v),
+		);
+		subToggle(
+			"Community plugin contents",
+			"Each community plugin's folder under plugins/ (code + per-plugin data.json). Risky: plugin data.json files may contain device-specific secrets, and plugin builds may differ across desktop and mobile.",
+			() => vcs.communityPluginContent,
+			(v) => (vcs.communityPluginContent = v),
+		);
 	}
 
 	private async testConnection(): Promise<void> {

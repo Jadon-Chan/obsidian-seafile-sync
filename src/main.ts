@@ -112,7 +112,7 @@ export default class SeafileSyncPlugin extends Plugin {
 		if (!secs || secs <= 0) return;
 		if (this.syncing) return;
 		if (!this.client || !this.settings.repoId) return;
-		if (isExcluded(path, this.settings.extraExcludes)) return;
+		if (isExcluded(path, this.settings.extraExcludes, this.settings.vaultConfigSync)) return;
 		if (this.realtimeHandle !== null) {
 			window.clearTimeout(this.realtimeHandle);
 		}
@@ -162,6 +162,7 @@ export default class SeafileSyncPlugin extends Plugin {
 					trashRetentionDays: this.settings.trashRetentionDays,
 					baseDir: `${this.manifest.dir ?? `${this.app.vault.configDir}/plugins/obsidian-seafile-sync`}/basecache`,
 					smartMerge: this.settings.smartMerge,
+					vaultConfigSync: this.settings.vaultConfigSync,
 				},
 				this.records,
 				{

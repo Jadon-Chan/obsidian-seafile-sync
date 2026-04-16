@@ -1,17 +1,24 @@
-import { App, TFile, TFolder, normalizePath } from "obsidian";
+import { App } from "obsidian";
 import { SeafileClient } from "../api/client";
 import { TokenInvalidError } from "../api/types";
 import { log } from "../utils/logger";
 import {
 	conflictName,
 	parentDir,
-	stripLeadingSlash,
 	vaultToSeafile,
 } from "../utils/paths";
+import {
+	deleteAt,
+	existsAt,
+	readBytes,
+	statAt,
+	writeBytes,
+} from "../utils/vaultIo";
 import { sha1Hex } from "../utils/hash";
 import { pruneTrash, stashLocal } from "../utils/trash";
 import { readBaseSnapshot, writeBaseSnapshot } from "../utils/baseCache";
 import { diff3Merge, looksBinary } from "../utils/diff3";
+import type { VaultConfigSyncSettings } from "../settings";
 import { ConflictResolver, ConflictStrategy } from "./conflict";
 import { decideAll } from "./decide";
 import { mergeForDecision, scanLocal, scanRemote } from "./scan";
@@ -26,6 +33,7 @@ export interface EngineConfig {
 	trashRetentionDays: number;
 	baseDir: string | null;
 	smartMerge: boolean;
+	vaultConfigSync?: VaultConfigSyncSettings;
 }
 
 export interface EngineCallbacks {
@@ -69,8 +77,8 @@ export class SyncEngine {
 		}
 		try {
 			const [local, remote] = await Promise.all([
-				scanLocal(this.app, cfg.excludes),
-				scanRemote(this.client, cfg.repoId, cfg.syncRoot, cfg.excludes),
+				scanLocal(this.app, cfg.excludes, cfg.vaultConfigSync),
+				scanRemote(this.client, cfg.repoId, cfg.syncRoot, cfg.excludes, cfg.vaultConfigSync),
 			]);
 			this.seedRecordsForExactMatches(local, remote, records);
 
@@ -205,11 +213,10 @@ export class SyncEngine {
 		remote: Map<string, { mtime: number; size: number; fileId: string }>,
 	): Promise<boolean> {
 		if (!cfg.baseDir) return false;
-		const file = this.app.vault.getAbstractFileByPath(vaultPath);
-		if (!(file instanceof TFile)) return false;
+		if (!(await existsAt(this.app, vaultPath))) return false;
 		const baseBytes = await readBaseSnapshot(this.app, cfg.baseDir, vaultPath);
 		if (!baseBytes) return false;
-		const localBytes = await this.app.vault.readBinary(file);
+		const localBytes = await readBytes(this.app, vaultPath);
 		const seafilePath = vaultToSeafile(cfg.syncRoot, vaultPath);
 		const remoteBytes = await this.client.downloadFile(cfg.repoId, seafilePath);
 		if (looksBinary(baseBytes) || looksBinary(localBytes) || looksBinary(remoteBytes)) {
@@ -224,10 +231,10 @@ export class SyncEngine {
 		if (result.conflict) return false;
 		const mergedBytes = new TextEncoder().encode(result.text).buffer as ArrayBuffer;
 		await this.stash(cfg, vaultPath);
-		await this.writeVaultBinary(vaultPath, mergedBytes);
+		await writeBytes(this.app, vaultPath, mergedBytes);
 		await this.client.uploadFile(cfg.repoId, seafilePath, mergedBytes);
 		const detail = await this.client.fileDetail(cfg.repoId, seafilePath);
-		const stat = await this.app.vault.adapter.stat(vaultPath);
+		const stat = await statAt(this.app, vaultPath);
 		const hash = await sha1Hex(mergedBytes);
 		records[vaultPath] = {
 			localMtime: stat?.mtime ?? Date.now(),
@@ -253,15 +260,14 @@ export class SyncEngine {
 		cfg: EngineConfig,
 		records: SyncRecordMap,
 	): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(vaultPath);
-		if (!(file instanceof TFile)) return;
-		const data = await this.app.vault.readBinary(file);
+		if (!(await existsAt(this.app, vaultPath))) return;
+		const data = await readBytes(this.app, vaultPath);
 		const hash = await sha1Hex(data);
 		const prev = records[vaultPath];
 		// Fast-path: file was only "touched" — same bytes as last sync. Skip
 		// the upload and just refresh the record so next scan sees no change.
 		if (prev?.localHash && prev.localHash === hash) {
-			const stat = await this.app.vault.adapter.stat(vaultPath);
+			const stat = await statAt(this.app, vaultPath);
 			records[vaultPath] = {
 				...prev,
 				localMtime: stat?.mtime ?? prev.localMtime,
@@ -274,7 +280,7 @@ export class SyncEngine {
 		await this.client.ensureDir(cfg.repoId, parentDir(seafilePath));
 		await this.client.uploadFile(cfg.repoId, seafilePath, data);
 		const detail = await this.client.fileDetail(cfg.repoId, seafilePath);
-		const stat = await this.app.vault.adapter.stat(vaultPath);
+		const stat = await statAt(this.app, vaultPath);
 		if (cfg.baseDir) await writeBaseSnapshot(this.app, cfg.baseDir, vaultPath, data);
 		const rec: SyncRecord = {
 			localMtime: stat?.mtime ?? Date.now(),
@@ -296,9 +302,9 @@ export class SyncEngine {
 		const seafilePath = vaultToSeafile(cfg.syncRoot, vaultPath);
 		const bytes = await this.client.downloadFile(cfg.repoId, seafilePath);
 		await this.stash(cfg, vaultPath);
-		await this.writeVaultBinary(vaultPath, bytes);
+		await writeBytes(this.app, vaultPath, bytes);
 		if (cfg.baseDir) await writeBaseSnapshot(this.app, cfg.baseDir, vaultPath, bytes);
-		const stat = await this.app.vault.adapter.stat(vaultPath);
+		const stat = await statAt(this.app, vaultPath);
 		const rem = remote.get(vaultPath);
 		const hash = await sha1Hex(bytes);
 		records[vaultPath] = {
@@ -318,7 +324,7 @@ export class SyncEngine {
 	): Promise<void> {
 		const seafilePath = vaultToSeafile(cfg.syncRoot, srcVaultPath);
 		const bytes = await this.client.downloadFile(cfg.repoId, seafilePath);
-		await this.writeVaultBinary(destVaultPath, bytes);
+		await writeBytes(this.app, destVaultPath, bytes);
 	}
 
 	private async doDeleteLocal(
@@ -326,10 +332,9 @@ export class SyncEngine {
 		records: SyncRecordMap,
 		cfg: EngineConfig,
 	): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(vaultPath);
-		if (file instanceof TFile) {
+		if (await existsAt(this.app, vaultPath)) {
 			await this.stash(cfg, vaultPath);
-			await this.app.fileManager.trashFile(file);
+			await deleteAt(this.app, vaultPath);
 		}
 		delete records[vaultPath];
 	}
@@ -342,27 +347,5 @@ export class SyncEngine {
 		const seafilePath = vaultToSeafile(cfg.syncRoot, vaultPath);
 		await this.client.deleteFile(cfg.repoId, seafilePath);
 		delete records[vaultPath];
-	}
-
-	private async writeVaultBinary(vaultPath: string, data: ArrayBuffer): Promise<void> {
-		const normPath = normalizePath(stripLeadingSlash(vaultPath));
-		await this.ensureVaultParent(normPath);
-		const existing = this.app.vault.getAbstractFileByPath(normPath);
-		if (existing instanceof TFile) {
-			await this.app.vault.modifyBinary(existing, data);
-		} else {
-			await this.app.vault.createBinary(normPath, data);
-		}
-	}
-
-	private async ensureVaultParent(vaultPath: string): Promise<void> {
-		const idx = vaultPath.lastIndexOf("/");
-		if (idx <= 0) return;
-		const dir = vaultPath.slice(0, idx);
-		const found = this.app.vault.getAbstractFileByPath(dir);
-		if (found instanceof TFolder) return;
-		if (!found) {
-			await this.app.vault.createFolder(dir);
-		}
 	}
 }

@@ -26,7 +26,14 @@ Works on Obsidian desktop and mobile. No Electron-only APIs.
 - **Local trash**: before overwriting or deleting a local file, stashes a
   timestamped copy. Old stashes are pruned after a configurable retention
   period (default 14 days).
-- **Exclude patterns**: `.obsidian/`, `.trash/`, `.git/` are always excluded.
+- **Vault configuration sync**: optionally sync parts of your vault's
+  configuration folder (appearance, hotkeys, themes and snippets, main
+  settings, community plugin list, community plugin contents) with
+  per-category toggles. Off by default. Device-specific files
+  (`workspace.json`, `workspace-mobile.json`, `graph.json`) and this plugin's
+  own folder are always excluded.
+- **Exclude patterns**: `.trash/`, `.git/` are always excluded. Without vault
+  configuration sync, the whole configuration folder is excluded as well.
   Additional patterns can be configured per line — supports prefix paths
   (`drafts/`) and globs (`**/*.png`, `*.tmp`).
 - **Status bar** indicator showing sync state (`idle`, `syncing N/M`, `error`)
@@ -77,6 +84,61 @@ Each file is compared across three states: **local** (vault), **remote**
 A file is considered "changed" when its mtime differs from the recorded value
 by more than 2 seconds, its size differs, or its Seafile file ID differs.
 
+## Vault configuration sync
+
+By default the plugin only syncs notes and attachments — your vault's
+configuration folder (`.obsidian/` or whatever you set via **Override config
+folder**) is skipped. Enable **Vault configuration sync** in settings to also
+sync items inside it, with per-category toggles modelled on Obsidian Sync.
+
+### Toggles
+
+| Toggle | Default | What it covers |
+|--------|---------|----------------|
+| Appearance | on | `appearance.json` (theme name, font size, base font, …) |
+| Hotkeys | on | `hotkeys.json` |
+| Themes and snippets | on | `themes/` and `snippets/` folders |
+| Main settings | on | `app.json`, `core-plugins.json`, and other top-level settings files (daily notes, bookmarks, templates, …) |
+| Community plugin list | off | `community-plugins.json` (which community plugins are enabled) |
+| Community plugin contents | off | Each community plugin's folder under `plugins/` (code and its `data.json`) |
+
+All toggles are off until you turn on the master **Enable** switch.
+
+### Always excluded
+
+These files never sync, even with every toggle on:
+
+- `workspace.json`, `workspace-mobile.json`, `graph.json` — per-device UI
+  state; syncing them causes constant conflicts and breaks layouts on other
+  devices.
+- `plugins/obsidian-seafile-sync/**` — this plugin's own folder. Your Seafile
+  API token lives in its `data.json` and should stay per-device. Excluding
+  the whole folder also avoids the plugin overwriting itself mid-sync.
+- `.git/`, `.trash/` — always excluded regardless of configuration sync.
+
+### Caveats
+
+- **Community plugin contents is risky.** A plugin's `data.json` may contain
+  device-specific secrets (API keys, paths). Bundled `main.js` files can also
+  differ between desktop and mobile or between plugin versions. Only turn
+  this on when you want identical plugin sets across devices. Use **Extra
+  excludes** to opt individual plugin folders out (e.g.
+  `.obsidian/plugins/some-plugin/data.json`).
+- **Edits to config files don't trigger real-time sync.** Obsidian's file
+  watcher doesn't emit events for hidden files, so changes to settings,
+  themes, and plugin data only propagate on the next manual or auto sync.
+- **First-sync conflicts.** If you enable configuration sync after both
+  devices have been used independently, expect conflicts on files like
+  `appearance.json`. Pick one device as the source of truth before enabling
+  it, or be ready to resolve via the conflict modal.
+- **Hot-reload isn't wired up.** Downloaded config changes take effect the
+  next time Obsidian reloads the relevant setting (some reload in place,
+  some require a full app restart).
+- **Profiles.** If you use **Settings → Files and links → Override config
+  folder** to run a per-device profile (e.g. `.obsidian-mobile`), the plugin
+  follows whatever `app.vault.configDir` reports, so profiles work out of
+  the box.
+
 ## Settings reference
 
 | Setting | Default | Description |
@@ -90,6 +152,7 @@ by more than 2 seconds, its size differs, or its Seafile file ID differs.
 | Smart merge | enabled | Three-way merge for text file conflicts |
 | Local trash | enabled | Stash files before overwrite/delete |
 | Trash retention | 14 days | How long to keep stashed files (0 = forever) |
+| Vault configuration sync | disabled | Master switch; unlocks per-category toggles for syncing parts of `.obsidian/`. See [Vault configuration sync](#vault-configuration-sync) |
 | Extra excludes | — | Additional exclude patterns, one per line |
 
 ## Commands
@@ -103,8 +166,9 @@ by more than 2 seconds, its size differs, or its Seafile file ID differs.
 
 The plugin only communicates with the Seafile server you configure. Your API
 token is stored in `.obsidian/plugins/obsidian-seafile-sync/data.json` on your
-device. Do not sync that file across devices — create a separate token for
-each device.
+device. The plugin's own folder is always excluded from sync (even with
+vault configuration sync fully enabled) so the token stays local — generate
+a separate token for each device.
 
 ## Development
 
