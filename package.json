@@ -1,19 +1,21 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "obsidian-seafile-sync",
+	"version": "0.1.0",
+	"description": "Two-way sync your Obsidian vault with a Seafile library.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"lint": "eslint ."
 	},
 	"keywords": [],
 	"license": "0-BSD",
 	"devDependencies": {
-		"@types/node": "^16.11.6",
+		"@types/node": "^20.11.0",
 		"esbuild": "0.25.5",
 		"eslint-plugin-obsidianmd": "0.1.9",
 		"globals": "14.0.0",
@@ -21,7 +23,8 @@
 		"typescript": "^5.8.3",
 		"typescript-eslint": "8.35.1",
 		"@eslint/js": "9.30.1",
-		"jiti": "2.6.1"
+		"jiti": "2.6.1",
+		"vitest": "^2.1.0"
 	},
 	"dependencies": {
 		"obsidian": "latest"

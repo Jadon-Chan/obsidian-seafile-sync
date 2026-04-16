@@ -1,90 +1,120 @@
-# Obsidian Sample Plugin
+# Obsidian Seafile Sync
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Two-way sync your Obsidian vault with a Seafile library. Built for students
+with Seafile accounts on `cloud.tsinghua.edu.cn` but works with any Seafile
+server that exposes Web API V2.1.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+Works on Obsidian desktop and mobile. No Electron-only APIs.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+## Features
 
-## First time developing plugins?
+- **Bidirectional sync** between your vault and a Seafile library, with
+  incremental transfers — only files that changed since the last sync are
+  transferred.
+- **Change detection** via mtime, size, Seafile file ID, and SHA-1 hash.
+  Editor "touches" that don't change content are ignored.
+- **Conflict resolution** when both local and remote copies changed:
+  keep local, keep remote, keep both (saves remote as
+  `filename.conflict-<timestamp>.ext`), or skip. An "apply to all remaining"
+  checkbox makes the choice sticky for the current sync run.
+- **Smart merge** (enabled by default): for text files, attempts a three-way
+  line-based merge using the base snapshot from the last sync. Falls back to
+  the conflict modal only if the merge produces conflicting hunks.
+- **Auto-sync** on a configurable interval (minutes).
+- **Real-time sync** with debounce: listens for vault file changes and triggers
+  a sync after a configurable idle period (seconds).
+- **Local trash**: before overwriting or deleting a local file, stashes a
+  timestamped copy. Old stashes are pruned after a configurable retention
+  period (default 14 days).
+- **Exclude patterns**: `.obsidian/`, `.trash/`, `.git/` are always excluded.
+  Additional patterns can be configured per line — supports prefix paths
+  (`drafts/`) and globs (`**/*.png`, `*.tmp`).
+- **Status bar** indicator showing sync state (`idle`, `syncing N/M`, `error`)
+  and last sync time.
+- **Rate limiting and retry**: API requests are capped at 4 concurrent, with
+  exponential backoff on transient errors (429, 5xx, network failures).
 
-Quick starting guide for new plugin devs:
+## Setup
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+1. **Get a Seafile API token.**
+   Sign in at your Seafile server in a browser. For Tsinghua Cloud this is
+   `https://cloud.tsinghua.edu.cn` (Tsinghua SSO). Open your profile page,
+   find the **API Token** section, and create/copy the token.
 
-## Releasing new releases
+2. **Install the plugin** in your vault
+   (`.obsidian/plugins/obsidian-seafile-sync/`) and enable it under
+   **Settings > Community plugins**.
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+3. Open **Settings > Obsidian Seafile Sync** and:
+   - Paste the token in **API token**.
+   - Click **Test connection** — your account email and the library dropdown
+     should appear.
+   - Pick the library to sync with.
+   - Optionally set a **Sync root** (path inside the library; `/` syncs the
+     whole library).
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+4. Run the command **Sync now**, or enable auto-sync / real-time sync.
 
-## Adding your plugin to the community plugin list
+On first sync the plugin seeds sync records for files that already exist on
+both sides with matching size, so connecting an existing vault to an existing
+library does not produce spurious conflicts.
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+## How sync works
 
-## How to use
+Each file is compared across three states: **local** (vault), **remote**
+(Seafile), and **last-sync record** (persisted in `data.json`).
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+| Record | Local | Remote | Action |
+|--------|-------|--------|--------|
+| Yes | Yes | Yes | Upload if local changed, download if remote changed, conflict if both changed |
+| Yes | Yes | No | Delete local (remote was deleted) |
+| Yes | No | Yes | Delete remote (local was deleted) |
+| Yes | No | No | Drop the stale record |
+| No | Yes | Yes | Seed record if same size, otherwise conflict |
+| No | Yes | No | Upload to remote |
+| No | No | Yes | Download to local |
 
-## Manually installing the plugin
+A file is considered "changed" when its mtime differs from the recorded value
+by more than 2 seconds, its size differs, or its Seafile file ID differs.
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+## Settings reference
 
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Server URL | `https://cloud.tsinghua.edu.cn` | Seafile server address |
+| API token | — | Token for authentication |
+| Library | — | Seafile library to sync with |
+| Sync root | `/` | Path inside the library |
+| Auto-sync interval | 0 (disabled) | Minutes between automatic syncs |
+| Real-time sync delay | 0 (disabled) | Seconds of idle after a vault change before syncing |
+| Smart merge | enabled | Three-way merge for text file conflicts |
+| Local trash | enabled | Stash files before overwrite/delete |
+| Trash retention | 14 days | How long to keep stashed files (0 = forever) |
+| Extra excludes | — | Additional exclude patterns, one per line |
 
-## Funding URL
+## Commands
 
-You can include funding URLs where people who use your plugin can financially support it.
+| Command | Description |
+|---------|-------------|
+| **Sync now** | Run a full bidirectional sync |
+| **Clear token** | Remove the stored API token and account email |
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+## Privacy
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+The plugin only communicates with the Seafile server you configure. Your API
+token is stored in `.obsidian/plugins/obsidian-seafile-sync/data.json` on your
+device. Do not sync that file across devices — create a separate token for
+each device.
+
+## Development
+
+```bash
+npm install
+npm run dev       # watch build -> main.js
+npm test          # vitest unit tests
+npm run build     # type-check + production bundle
 ```
 
-If you have multiple URLs, you can also do:
+## License
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
-
-## API Documentation
-
-See https://docs.obsidian.md
+0-BSD

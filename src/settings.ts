@@ -1,36 +1,36 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
-import MyPlugin from "./main";
-
-export interface MyPluginSettings {
-	mySetting: string;
+export interface SeafileSettings {
+	serverUrl: string;
+	apiToken: string;
+	repoId: string;
+	repoName: string;
+	syncRoot: string;
+	extraExcludes: string[];
+	lastSyncAt: number;
+	accountEmail: string;
+	autoSyncMinutes: number;
+	realtimeSyncSeconds: number;
+	trashEnabled: boolean;
+	trashRetentionDays: number;
+	smartMerge: boolean;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+export const DEFAULT_SETTINGS: SeafileSettings = {
+	serverUrl: "https://cloud.tsinghua.edu.cn",
+	apiToken: "",
+	repoId: "",
+	repoName: "",
+	syncRoot: "/",
+	extraExcludes: [],
+	lastSyncAt: 0,
+	accountEmail: "",
+	autoSyncMinutes: 0,
+	realtimeSyncSeconds: 0,
+	trashEnabled: true,
+	trashRetentionDays: 14,
+	smartMerge: true,
+};
 
-export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+export interface PersistedData {
+	settings: SeafileSettings;
+	records: Record<string, import("./sync/syncRecord").SyncRecord>;
 }
