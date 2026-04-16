@@ -75,6 +75,6 @@ describe("looksBinary", () => {
 	});
 	it("returns true when a null byte is present", () => {
 		const bytes = new Uint8Array([1, 2, 0, 4]);
-		expect(looksBinary(bytes.buffer as ArrayBuffer)).toBe(true);
+		expect(looksBinary(bytes.buffer)).toBe(true);
 	});
 });

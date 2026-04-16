@@ -20,11 +20,7 @@ export class ConflictModal extends Modal {
 			text: `Both copies of "${this.vaultPath}" changed since the last sync. Choose how to resolve:`,
 		});
 
-		const row = contentEl.createDiv();
-		row.style.display = "flex";
-		row.style.gap = "8px";
-		row.style.marginTop = "12px";
-		row.style.flexWrap = "wrap";
+		const row = contentEl.createDiv({ cls: "seafile-sync-conflict-buttons" });
 
 		const mkBtn = (label: string, choice: ConflictStrategy) => {
 			const b = row.createEl("button", { text: label });
@@ -34,8 +30,7 @@ export class ConflictModal extends Modal {
 		mkBtn("Keep remote", "keep-remote");
 		mkBtn("Keep both", "keep-both");
 
-		const applyRow = contentEl.createDiv();
-		applyRow.style.marginTop = "12px";
+		const applyRow = contentEl.createDiv({ cls: "seafile-sync-conflict-apply-all" });
 		const cb = applyRow.createEl("input", { type: "checkbox" });
 		cb.id = "seafile-sync-apply-all";
 		cb.onchange = () => {
@@ -46,8 +41,10 @@ export class ConflictModal extends Modal {
 		});
 		label.htmlFor = cb.id;
 
-		const cancel = contentEl.createEl("button", { text: "Skip this file" });
-		cancel.style.marginTop = "12px";
+		const cancel = contentEl.createEl("button", {
+			text: "Skip this file",
+			cls: "seafile-sync-conflict-skip",
+		});
 		cancel.onclick = () => this.choose("cancel");
 	}
 

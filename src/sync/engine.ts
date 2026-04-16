@@ -329,7 +329,7 @@ export class SyncEngine {
 		const file = this.app.vault.getAbstractFileByPath(vaultPath);
 		if (file instanceof TFile) {
 			await this.stash(cfg, vaultPath);
-			await this.app.vault.delete(file);
+			await this.app.fileManager.trashFile(file);
 		}
 		delete records[vaultPath];
 	}

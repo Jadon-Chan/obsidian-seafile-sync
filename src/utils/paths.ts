@@ -48,7 +48,12 @@ export function basename(seafilePath: string): string {
 	return idx < 0 ? p : p.slice(idx + 1);
 }
 
-const DEFAULT_EXCLUDES = [".obsidian/", ".trash/", ".git/"];
+// eslint-disable-next-line obsidianmd/hardcoded-config-path -- initial default, overridden by setConfigDir
+let DEFAULT_EXCLUDES = [".obsidian/", ".trash/", ".git/"];
+
+export function setConfigDir(dir: string): void {
+	DEFAULT_EXCLUDES = [`${dir}/`, ".trash/", ".git/"];
+}
 
 function isGlob(pat: string): boolean {
 	return pat.includes("*") || pat.includes("?");
@@ -76,7 +81,7 @@ export function globToRegex(glob: string): RegExp {
 		} else if (c === "?") {
 			re += "[^/]";
 			i++;
-		} else if (/[.+^$|()\[\]{}\\]/.test(c)) {
+		} else if (/[.+^$|()[\]{}\\]/.test(c)) {
 			re += "\\" + c;
 			i++;
 		} else {

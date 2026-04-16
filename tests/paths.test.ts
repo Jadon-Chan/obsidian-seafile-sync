@@ -55,9 +55,10 @@ describe("parentDir / basename", () => {
 });
 
 describe("isExcluded", () => {
-	it("always excludes .obsidian/**", () => {
-		expect(isExcluded(".obsidian/config")).toBe(true);
-		expect(isExcluded(".obsidian/plugins/x/main.js")).toBe(true);
+	it("always excludes config dir", () => {
+		const configDir = ".obsidian"; // eslint-disable-line obsidianmd/hardcoded-config-path
+		expect(isExcluded(`${configDir}/config`)).toBe(true);
+		expect(isExcluded(`${configDir}/plugins/x/main.js`)).toBe(true);
 	});
 	it("does not exclude unrelated paths", () => {
 		expect(isExcluded("notes/a.md")).toBe(false);

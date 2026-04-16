@@ -7,7 +7,7 @@ import { SyncRecordMap } from "./sync/syncRecord";
 import { promptConflict } from "./ui/conflictModal";
 import { SeafileSettingsTab } from "./ui/settingsTab";
 import { StatusBarController } from "./ui/statusBar";
-import { isExcluded } from "./utils/paths";
+import { isExcluded, setConfigDir } from "./utils/paths";
 import { log } from "./utils/logger";
 
 export default class SeafileSyncPlugin extends Plugin {
@@ -23,6 +23,7 @@ export default class SeafileSyncPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadAll();
+		setConfigDir(this.app.vault.configDir);
 		this.rebuildClient();
 
 		this.status = new StatusBarController(this.addStatusBarItem());
@@ -48,7 +49,7 @@ export default class SeafileSyncPlugin extends Plugin {
 
 		this.addCommand({
 			id: "clear-token",
-			name: "Clear Seafile token",
+			name: "Clear seafile token",
 			callback: async () => {
 				this.settings.apiToken = "";
 				this.settings.accountEmail = "";
@@ -140,11 +141,11 @@ export default class SeafileSyncPlugin extends Plugin {
 			return;
 		}
 		if (!this.client) {
-			new Notice("Configure a Seafile token in settings first.");
+			new Notice("Configure a seafile token in settings first");
 			return;
 		}
 		if (!this.settings.repoId) {
-			new Notice("Pick a Seafile library in settings first.");
+			new Notice("Pick a seafile library in settings first");
 			return;
 		}
 		this.syncing = true;
@@ -156,10 +157,10 @@ export default class SeafileSyncPlugin extends Plugin {
 					syncRoot: this.settings.syncRoot,
 					excludes: this.settings.extraExcludes,
 					trashDir: this.settings.trashEnabled
-						? `${this.manifest.dir ?? ".obsidian/plugins/obsidian-seafile-sync"}/trash`
+						? `${this.manifest.dir ?? `${this.app.vault.configDir}/plugins/obsidian-seafile-sync`}/trash`
 						: null,
 					trashRetentionDays: this.settings.trashRetentionDays,
-					baseDir: `${this.manifest.dir ?? ".obsidian/plugins/obsidian-seafile-sync"}/basecache`,
+					baseDir: `${this.manifest.dir ?? `${this.app.vault.configDir}/plugins/obsidian-seafile-sync`}/basecache`,
 					smartMerge: this.settings.smartMerge,
 				},
 				this.records,

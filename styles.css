@@ -1,8 +1,14 @@
-/*
+.seafile-sync-conflict-buttons {
+	display: flex;
+	gap: 8px;
+	margin-top: 12px;
+	flex-wrap: wrap;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.seafile-sync-conflict-apply-all {
+	margin-top: 12px;
+}
 
-If your plugin does not need CSS, delete this file.
-
-*/
+.seafile-sync-conflict-skip {
+	margin-top: 12px;
+}

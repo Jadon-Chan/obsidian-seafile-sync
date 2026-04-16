@@ -14,7 +14,7 @@ export class SeafileSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Seafile account" });
+		new Setting(containerEl).setName("Seafile account").setHeading();
 		containerEl.createEl("p", {
 			text:
 				"Generate an API token from your Seafile profile page and paste it below. " +
@@ -41,7 +41,7 @@ export class SeafileSettingsTab extends PluginSettingTab {
 			.setDesc("Stored locally in this plugin's data.json.")
 			.addText((t) => {
 				t.inputEl.type = "password";
-				t.setPlaceholder("paste token here")
+				t.setPlaceholder("Paste token here")
 					.setValue(this.plugin.settings.apiToken)
 					.onChange(async (v) => {
 						this.plugin.settings.apiToken = v.trim();
@@ -75,11 +75,11 @@ export class SeafileSettingsTab extends PluginSettingTab {
 				}),
 			);
 
-		containerEl.createEl("h2", { text: "Library" });
+		new Setting(containerEl).setName("Library").setHeading();
 
 		const repoSetting = new Setting(containerEl)
 			.setName("Seafile library")
-			.setDesc("The Seafile library (repo) to sync with.");
+			.setDesc("The seafile library (repo) to sync with");
 		repoSetting.addDropdown((d) => {
 			d.addOption("", "— select —");
 			for (const r of this.repos) d.addOption(r.id, r.name);
@@ -179,10 +179,11 @@ export class SeafileSettingsTab extends PluginSettingTab {
 				);
 			});
 
+		const configDir = this.app.vault.configDir;
 		new Setting(containerEl)
 			.setName("Extra excludes")
 			.setDesc(
-				"One pattern per line. Supports literal prefixes (drafts/) and globs (**/*.png, templates/**). .obsidian/, .trash/, .git/ are always excluded.",
+				`One pattern per line. Supports literal prefixes (drafts/) and globs (**/*.png, templates/**). ${configDir}/, .trash/, .git/ are always excluded.`,
 			)
 			.addTextArea((t) => {
 				t.inputEl.rows = 4;
