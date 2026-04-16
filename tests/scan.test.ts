@@ -28,7 +28,7 @@ describe("mergeForDecision", () => {
 			["a.md", { mtime: 7, size: 7, fileId: "r" }],
 		]);
 		const records = { "a.md": rec };
-		const [entry] = mergeForDecision(local, remote, records);
+		const entry = mergeForDecision(local, remote, records)[0]!;
 		expect(entry.local).toEqual({ mtime: 5, size: 5 });
 		expect(entry.remote).toEqual({ mtime: 7, size: 7, fileId: "r" });
 		expect(entry.record).toBe(rec);
@@ -37,7 +37,7 @@ describe("mergeForDecision", () => {
 	it("entries not present in a source are undefined", () => {
 		const local = new Map([["a.md", { mtime: 1, size: 1 }]]);
 		const remote = new Map<string, { mtime: number; size: number; fileId: string }>();
-		const [entry] = mergeForDecision(local, remote, {});
+		const entry = mergeForDecision(local, remote, {})[0]!;
 		expect(entry.remote).toBeUndefined();
 		expect(entry.record).toBeUndefined();
 	});
